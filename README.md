@@ -2,12 +2,12 @@
 网页版微信API，包含终端版微信及微信机器人
 
 ##与master版本的区别##
-默认自动回复\n
-默认设置小黄鸡Simsimi为聊天机器人
-添加谷歌语音识别功能，用户可以自动回复语音消息
-自动更换小黄鸡api——key
-修复无法稳定在线的bug（无限红包）
-运行:python weixin2.py
+* 默认自动回复
+* 默认设置小黄鸡Simsimi为聊天机器人
+* 添加谷歌语音识别功能，用户可以自动回复语音消息
+* 自动更换小黄鸡api——key
+* 修复无法稳定在线的bug（无限红包）
+* 运行:python weixin2.py
 
 ## Demo
 为了运行 `weixin.py` 示例脚本，你需要有安装 `qrcode` 包，你可以通过 `pip install qrcode` 来安装。
