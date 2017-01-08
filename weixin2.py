@@ -1,9 +1,12 @@
+
 #coding:utf-8
 #!/usr/bin/env python
 import sys 
+import re
 reload(sys) 
 sys.setdefaultencoding("utf-8")
-
+import maintest
+import subprocess
 import qrcode
 import urllib
 import urllib2
@@ -23,27 +26,27 @@ import httplib
 from collections import defaultdict
 from urlparse import urlparse
 from lxml import html
-from cleverbot import Cleverbot
+import transcribe
 
-
-
-from python_simsimi import SimSimi
-from python_simsimi.language_codes import LC_CHINESE_SIMPLIFIED
-from python_simsimi.simsimi import SimSimiException
-
-simSimi = SimSimi(
-        conversation_language=LC_CHINESE_SIMPLIFIED,
-        conversation_key='20666778-3204-480a-b98b-0d705ad7c170'
-)
-
-
-
-#import pdb
-
+import simsimi
+from language_codes import LC_CHINESE_SIMPLIFIED
+from simsimi import SimSimiException
+from simsimi import SimSimi
 # for media upload
 import mimetypes
+
 from requests_toolbelt.multipart.encoder import MultipartEncoder
-cb = Cleverbot() 
+
+
+keys = ['20666778-3204-480a-b98b-0d705ad7c170','45c0139e-7a59-4c06-9a83-7a9e4c8f6470','59a9d8b2-e4d0-495a-8a9f-1168cbb1193f']
+keys_sum = 0
+simSimis = []
+
+for i in range(len(keys)):
+    simSimis.append(simsimi.SimSimi(
+        conversation_language=LC_CHINESE_SIMPLIFIED,
+        conversation_key=keys[i] ))
+simSimi = simSimis[0]
 
 def catchKeyboardInterrupt(fn):
     def wrapper(*args):
@@ -66,6 +69,7 @@ def _decode_list(data):
             item = _decode_dict(item)
         rv.append(item)
     return rv
+
 
 
 def _decode_dict(data):
@@ -617,6 +621,7 @@ class WebWeixin(object):
         url = self.base_uri + \
             '/webwxgetvoice?msgid=%s&skey=%s' % (msgid, self.skey)
         data = self._get(url)
+        print "This is voice data: \n" + data
         if data == '':
             return ''
         fn = 'voice_' + msgid + '.mp3'
@@ -755,6 +760,7 @@ class WebWeixin(object):
                                               dstName.strip(), content.replace('<br/>', '\n')))
 
 
+               
     def handleMsg(self, r):
         for msg in r['AddMsgList']:
             print '[*] 你有新的消息，请注意查收'
@@ -776,12 +782,21 @@ class WebWeixin(object):
                 raw_msg = {'raw_msg': msg}
                 self._showMsg(raw_msg)
                 if self.autoReplyMode:
-                    response = {'response': '傻逼'}
+                    global simSimi
+                    global keys_sum
                     try:
                         response = simSimi.getConversation(content.encode('utf-8'))
-                        print response['response']
-                    except SimSimiException as e:
+                    except Exception, e:
                         print e
+                        if str(e).find("Not found") != -1:
+                            response = {'response': "傻逼"}
+                        elif str(e).find("Limit Exceeded") != -1:
+                            response = {'response': "到达每日上限了，正在自动更换api_key，使用第%d个api_key"%((keys_sum+1) % len(keys)+1)}
+                            keys_sum = keys_sum + 1
+                            simSimi = simSimis[keys_sum % len(keys)]
+                        else: 
+                            response = {'response': "代码出现了未知的问题"+str(e)}                    
+        
                     ans = response['response'].encode("utf-8")
                     if self.webwxsendmsg(ans, msg['FromUserName']):
                         print 'Auto: ' + ans
@@ -797,10 +812,33 @@ class WebWeixin(object):
                 self._safe_open(image)
             elif msgType == 34:
                 voice = self.webwxgetvoice(msgid)
+                print voice
+                text = maintest.file_upload(voice)
                 raw_msg = {'raw_msg': msg,
-                           'message': '%s 发了一段语音: %s' % (name, voice)}
+                           'message': '%s 发了一段语音: %s' % (name, text)}
                 self._showMsg(raw_msg)
                 self._safe_open(voice)
+                if self.autoReplyMode:
+                    global simSimi
+                    try:
+                        response = simSimi.getConversation(content.encode('utf-8'))
+                    except Exception, e:
+                        print e
+                        if str(e).find("Not found") != -1:
+                            response = {'response': "傻逼"}
+                        elif str(e).find("Limit Exceeded") != -1:
+                            response = {'response': "到达每日上限了，正在自动更换api_key，使用第%d个api_key"%((keys_sum+1) % len(keys)+1)}
+                            keys_sum = keys_sum + 1
+                            simSimi = simSimis[keys_sum % len(keys)]
+                        else: 
+                            response = {'response': "代码出现了未知的问题"+str(e)}
+                    ans = response['response'].encode("utf-8")
+                    if self.webwxsendmsg(ans, msg['FromUserName']):
+                        print 'Auto: ' + ans
+                        logging.info('Auto: ' + ans)
+                    else:
+                        print 'Auto Failed'
+                        logging.info('Auto Failed')
             elif msgType == 42:
                 info = msg['RecommendInfo']
                 print '%s 发送了一张名片:' % name
@@ -886,11 +924,11 @@ class WebWeixin(object):
                     # TODO
                     redEnvelope += 1
                     print '[*] 收到疑似红包消息 %d 次' % redEnvelope
-                    logging.debug('[*] 收到疑似红包消息 %d 次' % redEnvelope)
+                    #logging.debug('[*] 收到疑似红包消息 %d 次' % redEnvelope)
                 elif selector == '7':
                     playWeChat += 1
                     print '[*] 你在手机上玩微信被我发现了 %d 次' % playWeChat
-                    logging.debug('[*] 你在手机上玩微信被我发现了 %d 次' % playWeChat)
+                    #logging.debug('[*] 你在手机上玩微信被我发现了 %d 次' % playWeChat)
                     r = self.webwxsync()
                 elif selector == '0':
                     time.sleep(1)
